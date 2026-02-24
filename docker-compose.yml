@@ -1,0 +1,54 @@
+services:
+  database:
+    image: mysql:8
+    environment:
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: rootpassword
+    ports:
+      - "3308:3306"   # expose MySQL sur 3308 côté hôte
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - backend-net
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    environment:
+      DB_HOST: database
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_PORT: 3306
+      PORT: 3000
+    depends_on:
+      - database
+    networks:
+      - backend-net
+      - frontend-net
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        REACT_APP_API_URL: http://localhost:3001
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - frontend-net
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+
+networks:
+  frontend-net:
+  backend-net:
