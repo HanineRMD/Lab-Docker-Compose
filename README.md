@@ -65,7 +65,6 @@ L'application permet de créer, lister et supprimer des tâches avec une interfa
 ## 🚀 Installation et lancement
 
 ### 1. Cloner le projet
-```bash
 git clone https://github.com/HanineRMD/Lab-Docker-Compose.git
 cd Lab-Docker-Compose
 
@@ -145,12 +144,12 @@ DELETE	/api/tasks/:id	Supprimer une tâche par ID	-
 GET	/api/test	Tester la connexion à la base de données	-
 📸 Captures d'écran
 Page d'accueil avec la liste des tâches
-https://./screenshot/1.png
+![](screenshot/1.png)
 
 Capture d'écran 1 : Interface principale de l'application avec le formulaire d'ajout, le bouton de test de connexion et la liste des tâches
 
 Exemple d'utilisation avec tâches ajoutées
-https://./screenshot/2.png
+![](screenshot/2.png)
 
 Capture d'écran 2 : Affichage des tâches avec les boutons de suppression, le compteur de tâches et le design moderne avec dégradés
 
