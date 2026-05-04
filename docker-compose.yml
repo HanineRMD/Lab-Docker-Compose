@@ -7,7 +7,7 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD}
       MYSQL_ROOT_PASSWORD: rootpassword
     ports:
-      - "3308:3306"   # expose MySQL sur 3308 côté hôte
+      - "3308:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -31,13 +31,13 @@ services:
       - frontend-net
     restart: unless-stopped
     ports:
-      - "3001:3000"
+      - "3002:3000"  # ← Garder 3002
 
   frontend:
     build:
       context: ./frontend
       args:
-        REACT_APP_API_URL: http://localhost:3001
+        REACT_APP_API_URL: http://localhost:3002  # ← Déjà correct !
     ports:
       - "8080:80"
     depends_on:

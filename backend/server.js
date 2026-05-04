@@ -7,142 +7,301 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+console.log("=".repeat(60));
+console.log("🚀 BACKEND DÉMARRAGE - GESTION DE PERSONNES");
+console.log("=".repeat(60));
+
 let pool;
 let connectionAttempts = 0;
 const maxAttempts = 30;
 
 function connectToDatabase() {
-  pool = mysql.createPool({
+  const config = {
     host: process.env.DB_HOST || "database",
     user: process.env.DB_USER || "app_user",
     password: process.env.DB_PASSWORD || "app_password",
-    database: process.env.DB_NAME || "tasksdb",
-    port: process.env.DB_PORT || 3306,
+    database: process.env.DB_NAME || "personnes_db",
+    port: 3306,
     waitForConnections: true,
     connectionLimit: 10,
-    queueLimit: 0
+    queueLimit: 0,
+    connectTimeout: 20000
+  };
+
+  console.log("📦 Configuration MySQL:", {
+    host: config.host,
+    user: config.user,
+    database: config.database
   });
 
-  // Test database connection
+  pool = mysql.createPool(config);
+
   pool.getConnection((err, connection) => {
     if (err) {
       connectionAttempts++;
-      console.error(`❌ Database connection failed (attempt ${connectionAttempts}/${maxAttempts}):`, err.message);
+      console.error(`❌ Connexion échouée (${connectionAttempts}/${maxAttempts}):`, err.message);
       
       if (connectionAttempts < maxAttempts) {
-        console.log(`⏳ Retrying in 2 seconds...`);
-        setTimeout(connectToDatabase, 2000);
-      } else {
-        console.error(`❌ Failed to connect to database after ${maxAttempts} attempts. Exiting...`);
-        process.exit(1);
+        console.log("⏳ Nouvelle tentative dans 3 secondes...");
+        setTimeout(connectToDatabase, 3000);
       }
     } else {
-      console.log("✅ Database connected successfully");
+      console.log("✅ Connecté à MySQL avec succès!");
+      
+      // Créer la table si elle n'existe pas
+      connection.query(`
+        CREATE TABLE IF NOT EXISTS personnes (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          nom VARCHAR(100) NOT NULL,
+          prenom VARCHAR(100) NOT NULL,
+          age INT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `, (err) => {
+        if (err) {
+          console.error("❌ Erreur création table:", err);
+        } else {
+          console.log("✅ Table 'personnes' prête");
+          
+          // Vérifier si la table est vide
+          connection.query("SELECT COUNT(*) as count FROM personnes", (err, results) => {
+            if (!err && results[0].count === 0) {
+              // Insérer des données de test
+              const sampleData = [
+                ['Dupont', 'Jean', 25],
+                ['Martin', 'Sophie', 32],
+                ['Dubois', 'Pierre', 45]
+              ];
+              connection.query(
+                "INSERT INTO personnes (nom, prenom, age) VALUES ?",
+                [sampleData],
+                (err) => {
+                  if (!err) console.log("✅ Données de test insérées");
+                }
+              );
+            }
+          });
+        }
+        connection.release();
+      });
+      
       connectionAttempts = 0;
-      connection.release();
     }
   });
 }
 
-// Initial connection attempt
 connectToDatabase();
 
-// Health check
-app.get("/health", (req, res) => {
-  // Check if pool is initialized
-  if (!pool) {
-    return res.status(503).json({ status: "ERROR", database: "not connected" });
-  }
-  
-  // Test connection by getting a connection and releasing it
-  pool.getConnection((err, connection) => {
-    if (err) {
-      return res.status(503).json({ status: "ERROR", database: "disconnected", error: err.message });
+// Middleware pour logger toutes les requêtes
+app.use((req, res, next) => {
+  console.log(`📨 ${req.method} ${req.url}`);
+  next();
+});
+
+// Route de test
+app.get("/", (req, res) => {
+  res.json({ 
+    message: "API Gestion de Personnes",
+    version: "1.0.0",
+    endpoints: {
+      GET: "/api/personnes - Liste toutes les personnes",
+      GET: "/api/personnes/:id - Détail d'une personne",
+      POST: "/api/personnes - Ajouter une personne",
+      PUT: "/api/personnes/:id - Modifier une personne",
+      DELETE: "/api/personnes/:id - Supprimer une personne"
     }
-    connection.release();
-    res.json({ status: "OK", database: "connected" });
   });
 });
 
-// Récupérer toutes les tâches
-app.get("/api/tasks", (req, res) => {
+// Health check
+app.get("/health", (req, res) => {
   if (!pool) {
-    return res.status(503).json({ error: "Database not connected" });
+    return res.status(503).json({ 
+      status: "ERROR", 
+      database: "not connected",
+      timestamp: new Date().toISOString()
+    });
   }
   
-  pool.query("SELECT * FROM tasks ORDER BY id ASC", (err, results) => {
+  pool.getConnection((err, connection) => {
     if (err) {
-      console.error("Error fetching tasks:", err);
+      return res.status(503).json({ 
+        status: "ERROR", 
+        database: "disconnected",
+        error: err.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+    connection.release();
+    res.json({ 
+      status: "OK", 
+      database: "connected",
+      timestamp: new Date().toISOString()
+    });
+  });
+});
+
+// GET - Récupérer toutes les personnes
+app.get("/api/personnes", (req, res) => {
+  if (!pool) {
+    return res.status(503).json({ error: "Base de données non connectée" });
+  }
+  
+  pool.query("SELECT * FROM personnes ORDER BY id DESC", (err, results) => {
+    if (err) {
+      console.error("❌ Erreur SELECT:", err);
       return res.status(500).json({ error: err.message });
     }
+    console.log(`✅ ${results.length} personnes récupérées`);
     res.json(results);
   });
 });
 
-// Ajouter une tâche
-app.post("/api/tasks", (req, res) => {
+// GET - Récupérer une personne par ID
+app.get("/api/personnes/:id", (req, res) => {
   if (!pool) {
-    return res.status(503).json({ error: "Database not connected" });
+    return res.status(503).json({ error: "Base de données non connectée" });
   }
   
-  const { title, description } = req.body;
-  if (!title || !description) {
-    return res.status(400).json({ error: "Title et description requis" });
+  const { id } = req.params;
+  
+  pool.query("SELECT * FROM personnes WHERE id = ?", [id], (err, results) => {
+    if (err) {
+      console.error("❌ Erreur SELECT:", err);
+      return res.status(500).json({ error: err.message });
+    }
+    
+    if (results.length === 0) {
+      return res.status(404).json({ error: "Personne non trouvée" });
+    }
+    
+    res.json(results[0]);
+  });
+});
+
+// POST - Ajouter une personne
+app.post("/api/personnes", (req, res) => {
+  if (!pool) {
+    return res.status(503).json({ error: "Base de données non connectée" });
+  }
+  
+  const { nom, prenom, age } = req.body;
+  
+  // Validation
+  if (!nom || !prenom || !age) {
+    return res.status(400).json({ 
+      error: "Tous les champs sont requis",
+      required: ["nom", "prenom", "age"]
+    });
   }
 
+  if (isNaN(age) || age < 1 || age > 120) {
+    return res.status(400).json({ error: "L'âge doit être un nombre entre 1 et 120" });
+  }
+
+  console.log("📝 Ajout d'une personne:", { nom, prenom, age });
+
   pool.query(
-    "INSERT INTO tasks (title, description) VALUES (?, ?)",
-    [title, description],
+    "INSERT INTO personnes (nom, prenom, age) VALUES (?, ?, ?)",
+    [nom, prenom, age],
     (err, results) => {
       if (err) {
-        console.error("Error inserting task:", err);
+        console.error("❌ Erreur INSERT:", err);
         return res.status(500).json({ error: err.message });
       }
 
-      pool.query("SELECT * FROM tasks WHERE id = ?", [results.insertId], (err2, rows) => {
+      pool.query("SELECT * FROM personnes WHERE id = ?", [results.insertId], (err2, rows) => {
         if (err2) {
-          console.error("Error fetching new task:", err2);
           return res.status(500).json({ error: err2.message });
         }
+        console.log("✅ Personne ajoutée:", rows[0]);
+        res.status(201).json(rows[0]);
+      });
+    }
+  );
+});
+
+// PUT - Modifier une personne
+app.put("/api/personnes/:id", (req, res) => {
+  if (!pool) {
+    return res.status(503).json({ error: "Base de données non connectée" });
+  }
+  
+  const { id } = req.params;
+  const { nom, prenom, age } = req.body;
+
+  // Validation
+  if (!nom || !prenom || !age) {
+    return res.status(400).json({ 
+      error: "Tous les champs sont requis",
+      required: ["nom", "prenom", "age"]
+    });
+  }
+
+  if (isNaN(age) || age < 1 || age > 120) {
+    return res.status(400).json({ error: "L'âge doit être un nombre entre 1 et 120" });
+  }
+
+  console.log("📝 Modification personne ID:", id, { nom, prenom, age });
+
+  pool.query(
+    "UPDATE personnes SET nom = ?, prenom = ?, age = ? WHERE id = ?",
+    [nom, prenom, age, id],
+    (err, result) => {
+      if (err) {
+        console.error("❌ Erreur UPDATE:", err);
+        return res.status(500).json({ error: err.message });
+      }
+      
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: "Personne non trouvée" });
+      }
+
+      pool.query("SELECT * FROM personnes WHERE id = ?", [id], (err2, rows) => {
+        if (err2) {
+          return res.status(500).json({ error: err2.message });
+        }
+        console.log("✅ Personne modifiée:", rows[0]);
         res.json(rows[0]);
       });
     }
   );
 });
 
-// Add a test endpoint to verify the table exists
-app.get("/api/test", (req, res) => {
+// DELETE - Supprimer une personne
+app.delete("/api/personnes/:id", (req, res) => {
   if (!pool) {
-    return res.status(503).json({ error: "Database not connected" });
-  }
-  
-  pool.query("SHOW TABLES", (err, tables) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.json({ tables });
-  });
-});
-// Supprimer une tâche
-app.delete("/api/tasks/:id", (req, res) => {
-  if (!pool) {
-    return res.status(503).json({ error: "Database not connected" });
+    return res.status(503).json({ error: "Base de données non connectée" });
   }
   
   const { id } = req.params;
   
-  pool.query("DELETE FROM tasks WHERE id = ?", [id], (err, result) => {
+  console.log("🗑️ Suppression personne ID:", id);
+
+  pool.query("DELETE FROM personnes WHERE id = ?", [id], (err, result) => {
     if (err) {
-      console.error("Error deleting task:", err);
+      console.error("❌ Erreur DELETE:", err);
       return res.status(500).json({ error: err.message });
     }
     
     if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "Task not found" });
+      return res.status(404).json({ error: "Personne non trouvée" });
     }
     
-    res.json({ message: "Task deleted successfully", id });
+    console.log("✅ Personne supprimée ID:", id);
+    res.json({ 
+      message: "Personne supprimée avec succès", 
+      id: parseInt(id) 
+    });
   });
 });
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => {
+  console.log("=".repeat(60));
+  console.log(`✅ Serveur démarré sur le port ${PORT}`);
+  console.log(`🌐 http://localhost:${PORT}`);
+  console.log(`🌐 http://localhost:${PORT}/health`);
+  console.log(`🌐 http://localhost:${PORT}/api/personnes`);
+  console.log("=".repeat(60));
+});

@@ -1,21 +1,23 @@
--- Create the database if it doesn't exist (though it's already created by MYSQL_DATABASE)
-CREATE DATABASE IF NOT EXISTS tasksdb;
-USE tasksdb;
+-- Créer la base de données
+CREATE DATABASE IF NOT EXISTS personnes_db;
+USE personnes_db;
 
--- Create tasks table
-CREATE TABLE IF NOT EXISTS tasks (
+-- Créer la table avec les 3 champs
+CREATE TABLE IF NOT EXISTS personnes (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    status ENUM('pending', 'completed') DEFAULT 'pending',
+    nom VARCHAR(100) NOT NULL,
+    prenom VARCHAR(100) NOT NULL,
+    age INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Grant privileges to the app user
-GRANT ALL PRIVILEGES ON tasksdb.* TO 'app_user'@'%';
+-- Donner les droits
+GRANT ALL PRIVILEGES ON personnes_db.* TO 'app_user'@'%';
 FLUSH PRIVILEGES;
 
--- Insert some sample data
-INSERT INTO tasks (title, description) VALUES 
-    ('Première tâche', 'Description de la première tâche'),
-    ('Deuxième tâche', 'Description de la deuxième tâche');
+-- Insérer des données d'exemple
+INSERT INTO personnes (nom, prenom, age) VALUES
+    ('Dupont', 'Jean', 25),
+    ('Martin', 'Sophie', 32),
+    ('Dubois', 'Pierre', 45),
+    ('Bernard', 'Marie', 28);
